@@ -159,7 +159,7 @@ public final class BufferedImageFactory {
      */
     public void setSourceRegion(final Rectangle region) {
         // Re-fetch everything, if region changed
-        if (x != region.x || y != region.y || width != region.width || height != region.height) {
+        if (regionHasChanged(region)) {
             dispose();
         }
 
@@ -167,6 +167,15 @@ public final class BufferedImageFactory {
         y = region.y;
         width = region.width;
         height = region.height;
+    }
+
+    /**
+     * Checks if the region has changed
+     * 
+     * @param region the source region
+     */
+    private boolean regionHasChanged(final Rectangle region) {
+        return x != region.x || y != region.y || width != region.width || height != region.height;
     }
 
     /**
