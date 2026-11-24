@@ -200,8 +200,10 @@ public final class BufferedImageFactory {
 
     private synchronized void doFetch(final boolean colorModelOnly) throws ImageConversionException {
         if (!fetching && (!colorModelOnly && buffered == null || buffered == null && sourceColorModel == null)) {
+            boolean isFullImage = xSub > 1 || ySub > 1;
+            
             // NOTE: Subsampling is only applied if extracting full image
-            if (!colorModelOnly && (xSub > 1 || ySub > 1)) {
+            if (!colorModelOnly && isFullImage) {
                 // If only sampling a region, the region must be scaled too
                 if (width > 0 && height > 0) {
                     width = (width + xSub - 1) / xSub;
