@@ -94,6 +94,7 @@ import java.awt.image.RenderedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
@@ -208,6 +209,16 @@ class IndexImage {
      * Keep original alpha (not supported yet)
      */
     protected final static int TRANSPARENCY_TRANSLUCENT = 0x030000;
+
+    private static class ColorHistogram {
+        final List<Counter>[] colors;
+        final int sampleCount;
+
+        ColorHistogram(List<Counter>[] colors, int sampleCount) {
+            this.colors = colors;
+            this.sampleCount = sampleCount;
+        }
+    }
 
     /**
      * Used to track a color and the number of pixels of that colors
@@ -671,7 +682,13 @@ class IndexImage {
             pNumberOfColors--;
         }
 
-        //System.out.println("Transp: " + useTransparency + " colors: " + pNumberOfColors);
+        ColorHistogram histogram = createColorHistogram(pImage, isFast(pHints));
+        Cube[] cubes = createCubes(histogram, pNumberOfColors);
+
+        return createPalette(cubes, useTransparency);
+    }
+
+    private static ColorHistogram createColorHistogram(BufferedImage pImage, boolean pFast) {
         int width = pImage.getWidth();
         int height = pImage.getHeight();
 
@@ -682,7 +699,7 @@ class IndexImage {
         // Speedup, doesn't decrease image quality much
         int step = 1;
 
-        if (isFast(pHints)) {
+        if (pFast) {
             step += (width * height / 16384);// 128x128px
         }
         int sampleCount = 0;
@@ -731,12 +748,16 @@ class IndexImage {
             }
         }
 
+        return new ColorHistogram(colors, sampleCount);
+    }
+
+    private static Cube[] createCubes(ColorHistogram pHistogram, int pNumberOfColors) {
         // All colours found, reduce to pNumberOfColors
         int numberOfCubes = 1;
         int fCube = 0;
         Cube[] cubes = new Cube[pNumberOfColors];
 
-        cubes[0] = new Cube(colors, sampleCount);
+        cubes[0] = new Cube(pHistogram.colors, pHistogram.sampleCount);
 
         //cubes[0] = new Cube(colors, width * height);
         while (numberOfCubes < pNumberOfColors) {
@@ -790,14 +811,18 @@ class IndexImage {
             }
         }
 
+        return Arrays.copyOf(cubes, numberOfCubes);
+    }
+
+    private static IndexColorModel createPalette(Cube[] pCubes, boolean pUseTransparency) {
         // Create RGB arrays with correct number of colors
         // If we have transparency, the last color will be the transparent one
-        byte[] r = new byte[useTransparency ? numberOfCubes + 1 : numberOfCubes];
-        byte[] g = new byte[useTransparency ? numberOfCubes + 1 : numberOfCubes];
-        byte[] b = new byte[useTransparency ? numberOfCubes + 1 : numberOfCubes];
+        byte[] r = new byte[pUseTransparency ? pCubes.length + 1 : pCubes.length];
+        byte[] g = new byte[pUseTransparency ? pCubes.length + 1 : pCubes.length];
+        byte[] b = new byte[pUseTransparency ? pCubes.length + 1 : pCubes.length];
 
-        for (int i = 0; i < numberOfCubes; i++) {
-            int val = cubes[i].averageColor();
+        for (int i = 0; i < pCubes.length; i++) {
+            int val = pCubes[i].averageColor();
 
             r[i] = (byte) ((val >> 16) & 0xFF);
             g[i] = (byte) ((val >> 8) & 0xFF);
@@ -814,14 +839,11 @@ class IndexImage {
 
         // -- haraldK, 20021024, as suggested by Thomas E. Deweese
         // plus adding a transparent pixel
-        IndexColorModel icm;
-        if (useTransparency) {
-            icm = new InverseColorMapIndexColorModel(numOfBits, r.length, r, g, b, r.length - 1);
+        if (pUseTransparency) {
+            return new InverseColorMapIndexColorModel(numOfBits, r.length, r, g, b, r.length - 1);
         }
-        else {
-            icm = new InverseColorMapIndexColorModel(numOfBits, r.length, r, g, b);
-        }
-        return icm;
+
+        return new InverseColorMapIndexColorModel(numOfBits, r.length, r, g, b);
     }
 
     /**
